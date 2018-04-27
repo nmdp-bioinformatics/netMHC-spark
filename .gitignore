@@ -1,0 +1,63 @@
+# Created by https://www.gitignore.io/api/sbt,scala
+
+### SBT ###
+# Simple Build Tool
+# http://www.scala-sbt.org/release/docs/Getting-Started/Directories.html#configuring-version-control
+
+dist/*
+target/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+.history
+.cache
+.lib/
+
+
+syntax: glob
+*.ser
+*.class
+*~
+*.bak
+*.off
+*.old
+*.log
+
+# eclipse conf file
+.settings
+.classpath
+.project
+.manager
+.idea
+
+# building
+target
+build
+null
+tmp
+temp
+dist
+test-output
+build.log
+pom.xml.releaseBackup
+release.properties
+TestJavaClass*.java
+interpolated-*.xml
+
+# other scm
+.svn
+.CVS
+.hg*
+
+# switch to regexp syntax.
+#  syntax: regexp
+#  ^\.pc/
+
+#SHITTY output not in target directory
+build.log
+
+# IDEA conf files
+*.iml
+*.ipr
+*.iws
