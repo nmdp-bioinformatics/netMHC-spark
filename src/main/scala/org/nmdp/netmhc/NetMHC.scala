@@ -19,6 +19,7 @@ package org.nmdp.netmhc
  */
 import org.apache.log4j.{Level, LogManager}
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions.{concat, lit}
 
 case class Config(input: String = null,
                   output: String = null,
@@ -58,28 +59,37 @@ object NetMHC extends App {
 
     val spark = SparkSession
       .builder()
-      .appName("Spark SQL basic example")
-      .config("spark.some.config.option", "some-value")
+      .appName("NetMHC")
+      .config("spark.executor.instances", "15")
+      .config("spark.shuffle.compress", "true")
+      .config("spark.io.compression.codec", "snappy")
       .getOrCreate()
 
     import spark.implicits._
 
     // Create list of alleles from allele list file
-    val alleles = spark.sparkContext.
-      textFile(allelefile).
-      reduce((a, b) => a.concat(",").
-        concat(b))
+    val alleles = spark.sparkContext.textFile(allelefile)
+
+    // Read in peptide data - one peptide per line
+    val peps = spark.sparkContext.textFile(input)
+
+    val prdd = alleles.cartesian(peps).toDF("Allele","Pep").
+               select(concat($"Pep", lit(","), $"Allele").alias("cmd")).rdd.
+               map(row => row(0))
+
+    // Get size of rdd
+    val cnt = prdd.count.toInt / 200
+
+    val partitions = cnt.toInt
+
+    // repartition by how many rows
+    val rdd = prdd.repartition(partitions)
 
     // regex for macthing the rows with the binding affinity
     val binding = """(^\d.+)""".r
 
-    // Create command with allele list
-    val cmd = "netMHC -a ".concat(alleles).concat(" -p -- ")
+    val cmd = "/home/hadoop/run_netMHC.sh"
 
-    // Read in peptide data - one peptide per line
-    val rdd = spark.sparkContext.textFile(input)
-
-    // Pipe peptides into netMHC and extract results
     val pdf = rdd.pipe(cmd).
                      map(_.replaceAll("^ *","")).
                      filter(_.matches(binding.toString)).
@@ -101,7 +111,21 @@ object NetMHC extends App {
                         ,attributes(13)
                         )).toDF("HLA","peptide","Core","Offset","I_pos","I_len","D_pos",
                       "D_len","iCore","Identity","log50k","Affinity",
-                      "%Rank")
+                      "Rank").
+                      selectExpr("HLA","peptide","Core",
+                        "cast(Offset as int) as Offset",
+                        "cast(I_pos as int) as I_pos",
+                        "cast(I_len as int) as I_len",
+                        "cast(D_pos as int) as D_pos",
+                        "cast(D_len as int) as D_len",
+                        "iCore",
+                        "Identity",
+                        "cast(log50k as int) as log50k",
+                        "cast(Affinity as float) as Affinity",
+                        "cast(Rank as float) as Rank"
+                      )
+
+    //pdf.show()
 
     // Save results to the specified output directory
     pdf.write.format(format).save(output)
